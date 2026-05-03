@@ -1,0 +1,9 @@
+services:
+  web:
+    build:
+      context: .
+    platform: linux/arm64
+    container_name: iot-web
+    ports:
+      - "8080:80"
+    restart: unless-stopped

@@ -1,0 +1,30 @@
+=========================================
+HARDWARE PINOUT GUIDE - SMART HOME SYSTEM
+=========================================
+
+NODE 1: CLIMATE (Board: ESP32-C3)
+-----------------------------------------
+Role: Temperature, Humidity, and Light sensing.
+Power: 3.3V and GND from ESP32 to all sensors.
+
+1. AHT10 Sensor (I2C):
+   - SDA  -> Pin 8
+   - SCL  -> Pin 9
+
+2. Analog Light Sensor (LDR):
+   - OUT / AO -> Pin 2
+
+
+NODE 2: AUDIO & LED (Board: ESP32-32D / WROOM)
+-----------------------------------------
+Role: Non-blocking I2S noise monitoring and LED control.
+Power: 3.3V and GND from ESP32 to microphone.
+
+1. INMP441 Microphone (I2S):
+   - L/R  -> GND (Sets to Left Channel)
+   - WS   -> Pin 25
+   - SCK  -> Pin 26
+   - SD   -> Pin 27
+
+2. Status LED:
+   - built in led on pin 2

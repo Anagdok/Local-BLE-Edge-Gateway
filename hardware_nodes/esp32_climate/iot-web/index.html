@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>IoT Control Panel</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .logbox { max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+    .chart-container { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; border: 1px solid #14532d; }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">IoT Control Panel</div>
+  <div class="status">
+    <span class="dot online" id="status-dot"></span>
+    <span id="status-text">Oczekiwanie...</span>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="card highlight">
+    <h3>Temperatura</h3>
+    <div class="value" id="temp">-- °C</div>
+    <div class="sub">czujnik AHT10</div>
+  </section>
+
+  <section class="card highlight">
+    <h3>Wilgotność</h3>
+    <div class="value" id="hum">-- %</div>
+    <div class="sub">czujnik AHT10</div>
+  </section>
+
+  <section class="card">
+    <h3>Światło</h3>
+    <div class="value" id="light">--</div>
+    <div class="sub">czujnik analogowy</div>
+  </section>
+
+  <section class="card">
+    <h3>Hałas</h3>
+    <div class="value" id="noise">-- / 100</div>
+    <div class="sub">czujnik I2S (INMP441)</div>
+  </section>
+
+  <section class="card control">
+    <h3>Sterowanie LED</h3>
+    <div class="buttons">
+      <button class="btn on">ON</button>
+      <button class="btn off">OFF</button>
+    </div>
+  </section>
+
+  <section class="card log">
+    <h3>Log systemu</h3>
+    <div class="logbox" id="log"></div>
+  </section>
+
+  <section class="card" style="grid-column: 1 / -1;">
+    <h3>Historia Odczytów (Ostatnie 10)</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 15px; margin-top: 15px;">
+      <div class="chart-container"><canvas id="tempChart"></canvas></div>
+      <div class="chart-container"><canvas id="humChart"></canvas></div>
+      <div class="chart-container"><canvas id="lightChart"></canvas></div>
+      <div class="chart-container"><canvas id="noiseChart"></canvas></div>
+    </div>
+  </section>
+</main>
+
+<script>
+  let tempChart, humChart, lightChart, noiseChart;
+
+  function addLog(message) {
+    const logBox = document.getElementById("log");
+    const timeString = new Date().toLocaleTimeString();
+    logBox.innerHTML += `<p>[${timeString}] ${message}</p>`;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function initCharts() {
+    Chart.defaults.color = '#a7f3d0';
+    const commonOptions = { responsive: true, plugins: { legend: { display: false } }, scales: { x: { display: false } } };
+
+    tempChart = new Chart(document.getElementById('tempChart'), {
+      type: 'line', data: { labels: [], datasets: [{ label: 'Temp', data: [], borderColor: '#ef4444', tension: 0.3 }] },
+      options: { ...commonOptions, plugins: { title: { display: true, text: 'Temperatura (°C)', color: '#ef4444' } } }
+    });
+    humChart = new Chart(document.getElementById('humChart'), {
+      type: 'line', data: { labels: [], datasets: [{ label: 'Wilg', data: [], borderColor: '#3b82f6', tension: 0.3 }] },
+      options: { ...commonOptions, plugins: { title: { display: true, text: 'Wilgotność (%)', color: '#3b82f6' } } }
+    });
+    lightChart = new Chart(document.getElementById('lightChart'), {
+      type: 'line', data: { labels: [], datasets: [{ label: 'Swiatlo', data: [], borderColor: '#eab308', tension: 0.3 }] },
+      options: { ...commonOptions, plugins: { title: { display: true, text: 'Światło', color: '#eab308' } } }
+    });
+    noiseChart = new Chart(document.getElementById('noiseChart'), {
+      type: 'line', data: { labels: [], datasets: [{ label: 'Halas', data: [], borderColor: '#a855f7', tension: 0.3 }] },
+      options: { ...commonOptions, plugins: { title: { display: true, text: 'Hałas (0-100)', color: '#a855f7' } } }
+    });
+  }
+
+  async function fetchLiveData() {
+      try {
+          const response = await fetch(`http://${window.location.hostname}:9001/api/data`);
+          if (!response.ok) throw new Error('API Error');
+          const data = await response.json();
+
+          if (data.status === "success") {
+              document.getElementById("temp").innerText = (data.temperature || 0).toFixed(1) + " °C";
+              document.getElementById("hum").innerText = (data.humidity || 0).toFixed(1) + " %";
+              document.getElementById("light").innerText = (data.light || 0);
+              document.getElementById("noise").innerText = (data.noise || 0) + " / 100";
+
+              document.getElementById("status-dot").style.background = "#22c55e";
+              document.getElementById("status-dot").style.boxShadow = "0 0 12px #22c55e";
+              document.getElementById("status-text").innerText = "API Połączone";
+          }
+      } catch (error) {
+          document.getElementById("status-dot").style.background = "#ef4444";
+          document.getElementById("status-dot").style.boxShadow = "0 0 12px #ef4444";
+          document.getElementById("status-text").innerText = "Brak łączności";
+      }
+  }
+
+  async function fetchHistoryData() {
+      try {
+          const response = await fetch(`http://${window.location.hostname}:9001/api/history`);
+          if (!response.ok) return;
+          const data = await response.json();
+
+          if (data.status === "success") {
+              tempChart.data.labels = data.timestamps; tempChart.data.datasets[0].data = data.temperature; tempChart.update();
+              humChart.data.labels = data.timestamps; humChart.data.datasets[0].data = data.humidity; humChart.update();
+              lightChart.data.labels = data.timestamps; lightChart.data.datasets[0].data = data.light; lightChart.update();
+              noiseChart.data.labels = data.timestamps; noiseChart.data.datasets[0].data = data.noise; noiseChart.update();
+          }
+      } catch (error) {}
+  }
+
+  async function sendLedCommand(state) {
+      addLog(`Wysyłam do API: ${state}...`);
+      try {
+          const response = await fetch(`http://${window.location.hostname}:9001/api/led`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: state })
+          });
+          if (response.ok) {
+              addLog(`API zapisało: ${state}. Czekam na reakcję ESP...`);
+          } else {
+              addLog(`<span style="color:#ef4444">Błąd API przy wysyłaniu!</span>`);
+          }
+      } catch (error) {
+          addLog(`<span style="color:#ef4444">Brak połączenia z API!</span>`);
+      }
+  }
+
+  addLog("Panel gotowy. Pobieranie danych...");
+  initCharts();
+  fetchLiveData();
+  fetchHistoryData();
+  
+  setInterval(() => {
+    fetchLiveData();
+    fetchHistoryData();
+  }, 5000);
+
+  const btnOn = document.querySelector(".btn.on");
+  const btnOff = document.querySelector(".btn.off");
+
+  btnOn.onclick = () => { btnOn.classList.add("active"); btnOff.classList.remove("active"); sendLedCommand("ON"); };
+  btnOff.onclick = () => { btnOff.classList.add("active"); btnOn.classList.remove("active"); sendLedCommand("OFF"); };
+</script>
+</body>
+</html>
